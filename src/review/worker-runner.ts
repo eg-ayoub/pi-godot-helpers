@@ -36,6 +36,8 @@ export interface WorkerOptions {
 	/** "provider/id" */
 	model?: string;
 	thinking?: string;
+	/** Load the user's extensions (the session's model may come from one); false: only this one and extraExtensions. */
+	inheritExtensions: boolean;
 	extraExtensions: string[];
 	timeoutSeconds: number;
 	signal?: AbortSignal;
@@ -54,7 +56,10 @@ export interface WorkerOutcome {
 }
 
 export function workerArgs(job: WorkerJob, opts: WorkerOptions): string[] {
-	const args = ["--mode", "json", "-p", "--no-session", "-na", "-nc", "-ne"];
+	// -na: a repository's own .pi files never reach a worker. The user's extensions do (a provider extension such as
+	// pi-llama-cpp registers the model), minus MCP servers; their tools stay blocked by --tools and the gate.
+	// pi loads an extension path once, so passing this one again is harmless when it is also installed.
+	const args = ["--mode", "json", "-p", "--no-session", "-na", "-nc", ...(opts.inheritExtensions ? ["--no-mcp"] : ["-ne"])];
 	for (const ext of opts.extraExtensions) args.push("-e", ext);
 	args.push("-e", opts.extensionPath, "--no-skills");
 	for (const dir of job.advertisedSkillDirs) args.push("--skill", dir);

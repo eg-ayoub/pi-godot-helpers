@@ -54,7 +54,12 @@ export interface WorkerConfig {
 	thinking?: string;
 	concurrencyLocal: number;
 	concurrencyCloud: number;
-	/** Extensions workers load besides this one (e.g. a provider extension). */
+	/**
+	 * Workers load the user's extensions like a normal pi start (without MCP servers), so a model whose provider an
+	 * extension registers works in them. false: only this extension and extraExtensions.
+	 */
+	inheritExtensions: boolean;
+	/** More extensions for the workers (with inheritExtensions false, e.g. the one that provides the model). */
 	extraExtensions: string[];
 	timeoutSeconds: number;
 	/** Share of the worker model's context window a unit's prompt may fill. */
@@ -145,6 +150,7 @@ export const DEFAULT_CONFIG: Config = {
 	worker: {
 		concurrencyLocal: 1,
 		concurrencyCloud: 3,
+		inheritExtensions: true,
 		extraExtensions: [],
 		timeoutSeconds: 900,
 		unitPromptFraction: 0.5,

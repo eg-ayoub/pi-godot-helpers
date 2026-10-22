@@ -223,7 +223,7 @@ keys you set change. The most useful ones, with their defaults:
     "keepAliveSeconds": 0,
     "advisorSkills": 2
   },
-  "worker": { "concurrencyLocal": 1, "concurrencyCloud": 3, "extraExtensions": [] },
+  "worker": { "concurrencyLocal": 1, "concurrencyCloud": 3, "inheritExtensions": true, "extraExtensions": [] },
   "viewer": { "open": true }
 }
 ```
@@ -237,8 +237,10 @@ keys you set change. The most useful ones, with their defaults:
 - `keepAliveSeconds` above 0 keeps `llama-server` running between advisor questions (faster, but it holds GPU
   memory). Reviews always stop it before the workers start.
 - `classifier.piModel: "provider/id"` uses a classifier pi already knows instead of starting `llama-server`.
-- `worker.model: "provider/id"` reviews with another model than the session's. `worker.extraExtensions` lists
-  extensions the workers need, for example one that provides your model.
+- `worker.model: "provider/id"` reviews with another model than the session's.
+- Review workers load your pi extensions like a normal start (without MCP servers), so a model that an extension
+  provides (for example pi-llama-cpp's models from Strata or Jan) works in them too. Other extensions' tools stay
+  blocked. `worker.inheritExtensions: false` gives workers only this extension plus `worker.extraExtensions`.
 
 ## Development
 

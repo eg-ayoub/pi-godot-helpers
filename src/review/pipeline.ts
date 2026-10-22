@@ -217,6 +217,7 @@ export class ReviewController {
 					extensionPath: join(PACKAGE_ROOT, "src", "index.ts"),
 					model,
 					thinking: rt.config.worker.thinking ?? pi.getThinkingLevel(),
+					inheritExtensions: rt.config.worker.inheritExtensions,
 					extraExtensions: rt.config.worker.extraExtensions,
 					timeoutSeconds: rt.config.worker.timeoutSeconds,
 					signal: abort.signal,
