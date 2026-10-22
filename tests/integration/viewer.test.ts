@@ -75,7 +75,7 @@ describe("review viewer server", () => {
 		const cookie = String(page.headers["set-cookie"]).split(";")[0];
 		const list = await get(`${base}/api/reviews`, { cookie });
 		expect(list.status).toBe(200);
-		expect(JSON.parse(list.body)[0]).toMatchObject({ description: "HEAD against develop", findings: 1 });
+		expect(JSON.parse(list.body)[0]).toMatchObject({ description: "HEAD against develop", findings: 1, kind: "review" });
 		const review = await get(`${base}/api/review/2026-10-22T10-00-00-000Z`, { cookie });
 		expect(JSON.parse(review.body).comments[0].title).toBe("<img src=x onerror=alert(1)>");
 		expect((await get(`${base}/api/review/2026-10-22T10-00-00-000Z/md`, { cookie })).headers["content-disposition"]).toContain("attachment");
@@ -99,6 +99,24 @@ describe("review viewer server", () => {
 		expect((await get(server.url(), { host: `evil.example:${url.port}` })).status).toBe(403);
 		expect((await get(`${url.origin}/api/review/..%2F..%2Fetc?t=${url.searchParams.get("t")}`)).status).toBe(404);
 		expect((await get(`${url.origin}/api/review/../../x?t=${url.searchParams.get("t")}`)).status).toBe(404);
+	});
+});
+
+describe("review list", () => {
+	it("tells verifications apart, with the review they check and what is still open", async () => {
+		const dir = reviewsDir();
+		const id = "2026-10-22T11-00-00-000Z";
+		mkdirSync(join(dir, id));
+		const verdict = (status: string) => ({ verdict: { status, evidence: "", by: "worker" } });
+		writeFileSync(
+			join(dir, id, "review.json"),
+			JSON.stringify({ version: 1, kind: "verify", verifies: { id: "2026-10-22T10-00-00-000Z" }, id, createdAt: "2026-10-22T11:00:00.000Z", target: { description: "HEAD against develop" }, status: "complete", comments: [verdict("fixed"), verdict("still-present"), verdict("unclear")] }),
+		);
+		server = new ViewerServer(dir);
+		expect(server.list()).toEqual([
+			{ id, description: "HEAD against develop", createdAt: "2026-10-22T11:00:00.000Z", findings: 3, status: "complete", kind: "verify", verifies: "2026-10-22T10-00-00-000Z", open: 2 },
+			{ id: "2026-10-22T10-00-00-000Z", description: "HEAD against develop", createdAt: "2026-10-22T10:00:00.000Z", findings: 1, status: "complete", kind: "review" },
+		]);
 	});
 });
 

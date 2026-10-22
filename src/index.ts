@@ -6,6 +6,7 @@ import { registerMigrate } from "./docs/migrate.ts";
 import { memoryFor, registerMemory } from "./memory/tools.ts";
 import { repositoryRules } from "./prompts.ts";
 import { registerReview } from "./review/pipeline.ts";
+import { registerVerify } from "./review/verify.ts";
 import { registerWorkerTools } from "./review/worker-mode.ts";
 import { Runtime } from "./runtime.ts";
 import { decideToolCall } from "./security/gate.ts";
@@ -46,6 +47,7 @@ export default function godotHelpers(pi: ExtensionAPI): void {
 	registerWorkerTools(pi, rt);
 	registerAdvisor(pi, rt);
 	const reviews = registerReview(pi, rt);
+	registerVerify(pi, rt, reviews);
 	registerViewer(pi, rt, reviews);
 	registerMemory(pi, rt, reviews);
 	registerRouting(pi, rt, reviews);
@@ -55,7 +57,7 @@ export default function godotHelpers(pi: ExtensionAPI): void {
 		const store = memoryFor(r);
 		if (!store) return [];
 		const s = store.stats();
-		return [`memory: ${s.notes} file note(s), ${s.facts} fact(s), ${s.raised} raised item(s), ${s.reviews} review(s) in ${store.dir}`];
+		return [`memory: ${s.notes} file note(s), ${s.facts} fact(s), ${s.raised} open raised item(s), ${s.reviews} review(s) in ${store.dir}`];
 	});
 
 	pi.on("session_start", async (_event, ctx) => {

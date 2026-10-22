@@ -28,6 +28,10 @@ export interface ReviewListEntry {
 	createdAt: string;
 	findings: number;
 	status: string;
+	kind: "review" | "verify";
+	/** Verifications: the review they check, and how many of its findings are not fixed. */
+	verifies?: string;
+	open?: number;
 }
 
 export class ViewerServer {
@@ -144,8 +148,20 @@ export class ViewerServer {
 			const file = join(this.reviewsDir, id, "review.json");
 			if (!ID.test(id) || !existsSync(file)) continue;
 			try {
-				const r = JSON.parse(readFileSync(file, "utf8")) as { target?: { description?: string }; createdAt?: string; comments?: unknown[]; status?: string };
-				out.push({ id, description: r.target?.description ?? id, createdAt: r.createdAt ?? statSync(file).mtime.toISOString(), findings: r.comments?.length ?? 0, status: r.status ?? "?" });
+				const r = JSON.parse(readFileSync(file, "utf8")) as {
+					target?: { description?: string };
+					createdAt?: string;
+					comments?: { verdict?: { status?: string } }[];
+					status?: string;
+					kind?: string;
+					verifies?: { id?: string };
+				};
+				const entry: ReviewListEntry = { id, description: r.target?.description ?? id, createdAt: r.createdAt ?? statSync(file).mtime.toISOString(), findings: r.comments?.length ?? 0, status: r.status ?? "?", kind: r.kind === "verify" ? "verify" : "review" };
+				if (entry.kind === "verify") {
+					entry.verifies = r.verifies?.id;
+					entry.open = (r.comments ?? []).filter((c) => c.verdict?.status !== "fixed").length;
+				}
+				out.push(entry);
 			} catch {
 				// a review being written
 			}

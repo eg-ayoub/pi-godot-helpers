@@ -6,6 +6,7 @@ import { basename } from "node:path";
 import type { RawComment } from "./aggregate.ts";
 
 export const WORKER_TOOLS = ["read", "grep", "find", "ls", "bash", "review_comment", "review_done", "memory_note_file"];
+export const REVIEW_TASK = "Review the change in the attached context. Report findings with review_comment, then call review_done.";
 
 /** How to start the same pi that runs this process (pi's subagent example, getPiInvocation). */
 export function piInvocation(args: string[]): { command: string; args: string[] } {
@@ -28,6 +29,9 @@ export interface WorkerJob {
 	logFile: string;
 	/** Skill directories advertised to the worker (it may read them). */
 	advertisedSkillDirs: string[];
+	/** Tools and the prompt of the job; a review by default. */
+	tools?: string[];
+	task?: string;
 }
 
 export interface WorkerOptions {
@@ -44,10 +48,18 @@ export interface WorkerOptions {
 	onEvent?: (unitId: string, event: Record<string, any>) => void;
 }
 
+export interface RawVerdict {
+	finding: string;
+	status: string;
+	evidence?: string;
+	line?: number;
+}
+
 export interface WorkerOutcome {
 	unitId: string;
 	exitCode: number | null;
 	comments: RawComment[];
+	verdicts: RawVerdict[];
 	notes: Record<string, unknown>[];
 	summary?: string;
 	finished: boolean;
@@ -63,24 +75,26 @@ export function workerArgs(job: WorkerJob, opts: WorkerOptions): string[] {
 	for (const ext of opts.extraExtensions) args.push("-e", ext);
 	args.push("-e", opts.extensionPath, "--no-skills");
 	for (const dir of job.advertisedSkillDirs) args.push("--skill", dir);
-	args.push("--tools", WORKER_TOOLS.join(","));
+	args.push("--tools", (job.tools ?? WORKER_TOOLS).join(","));
 	if (opts.model) args.push("--model", opts.model);
 	if (opts.thinking) args.push("--thinking", opts.thinking);
-	args.push("--append-system-prompt", job.systemFile, "--godot-helpers-worker", job.unitFile, `@${job.contextFile}`, "Review the change in the attached context. Report findings with review_comment, then call review_done.");
+	args.push("--append-system-prompt", job.systemFile, "--godot-helpers-worker", job.unitFile, `@${job.contextFile}`, job.task ?? REVIEW_TASK);
 	return args;
 }
 
-export function readOut(outFile: string): { comments: RawComment[]; notes: Record<string, unknown>[]; summary?: string; finished: boolean } {
+export function readOut(outFile: string): { comments: RawComment[]; verdicts: RawVerdict[]; notes: Record<string, unknown>[]; summary?: string; finished: boolean } {
 	const comments: RawComment[] = [];
+	const verdicts: RawVerdict[] = [];
 	const notes: Record<string, unknown>[] = [];
 	let summary: string | undefined;
 	let finished = false;
-	if (!existsSync(outFile)) return { comments, notes, finished };
+	if (!existsSync(outFile)) return { comments, verdicts, notes, finished };
 	for (const line of readFileSync(outFile, "utf8").split("\n")) {
 		if (!line.trim()) continue;
 		try {
 			const r = JSON.parse(line) as Record<string, any>;
 			if (r.type === "comment") comments.push(r as RawComment);
+			else if (r.type === "verdict") verdicts.push(r as RawVerdict);
 			else if (r.type === "note" || r.type === "fact") notes.push(r);
 			else if (r.type === "done") {
 				summary = String(r.summary ?? "");
@@ -90,7 +104,7 @@ export function readOut(outFile: string): { comments: RawComment[]; notes: Recor
 			// a torn last line from a killed worker
 		}
 	}
-	return { comments, notes, summary, finished };
+	return { comments, verdicts, notes, summary, finished };
 }
 
 export function runWorker(job: WorkerJob, opts: WorkerOptions): Promise<WorkerOutcome> {

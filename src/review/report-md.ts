@@ -1,7 +1,7 @@
 // review.md: the review as Markdown, written next to review.json every time.
-import { countBySeverity } from "./aggregate.ts";
+import { countBySeverity, countByStatus, STATUS_WORDS } from "./aggregate.ts";
 import type { ReviewRecord } from "./record.ts";
-import type { ReviewComment } from "./types.ts";
+import { VERDICT_STATUSES, type ReviewComment } from "./types.ts";
 
 function fence(text: string, lang = ""): string {
 	const ticks = text.includes("```") ? "````" : "```";
@@ -19,6 +19,7 @@ function commentMd(c: ReviewComment): string[] {
 }
 
 export function renderMarkdown(r: ReviewRecord): string {
+	if (r.kind === "verify") return renderVerification(r);
 	const counts = countBySeverity(r.comments);
 	const out: string[] = [
 		`# Review: ${r.target.description}`,
@@ -63,6 +64,50 @@ export function renderMarkdown(r: ReviewRecord): string {
 	if (r.skills) out.push(`Skills: ${r.skills.tag ? `GodotPrompter ${r.skills.tag} (${r.skills.commit?.slice(0, 7)})` : r.skills.source}`, "");
 	const skipped = r.files.filter((f) => f.skipped);
 	if (skipped.length) out.push("## Not reviewed", "", ...skipped.map((f) => `- ${f.path}: ${f.skipped}`), "");
+	const cost = r.workers.reduce((s, w) => s + w.usage.cost, 0);
+	const tokens = r.workers.reduce((s, w) => s + w.usage.input + w.usage.output, 0);
+	out.push("## Cost", "", `Workers: ${r.workers.length}, ${tokens} tokens${cost ? `, $${cost.toFixed(4)}` : ""}, ${(r.durationMs / 1000).toFixed(1)} s in total.`, "");
+	return out.join("\n");
+}
+
+function verdictMd(c: ReviewComment): string[] {
+	const was = c.previous?.line !== null && c.previous?.line !== undefined ? `was line ${c.previous.line}` : "";
+	const where = c.file ? `\`${c.file}${c.line !== null ? `:${c.line}` : ""}\`` : "(project)";
+	const lines = [`- **[${c.severity}] ${c.title || "(untitled)"}** ${where}${was ? ` (${was})` : ""} · ${c.discipline}`];
+	const v = c.verdict;
+	if (v?.evidence) lines.push("", `  ${v.by === "check" ? "Check" : "Verdict"}: ${v.evidence.replace(/\n/g, "\n  ")}`);
+	if (v?.by === "earlier") lines.push("", `  _(found fixed by the verification ${v.verificationId ?? "before"}; not checked again)_`);
+	if (v?.status !== "fixed" && c.body) lines.push("", "  The review said:", "", ...c.body.split("\n").map((l) => `  > ${l}`));
+	lines.push("");
+	return lines;
+}
+
+/** review.md of a verification: the findings of the review, grouped by whether they were fixed. */
+function renderVerification(r: ReviewRecord): string {
+	const counts = countByStatus(r.comments);
+	const out: string[] = [
+		`# Verification: ${r.target.description}`,
+		"",
+		`Checks the findings of the review of ${r.verifies?.createdAt ?? "?"} (${r.verifies?.id ?? "?"}) against the code as it is now (${r.createdAt}, ${r.repo.toplevel}). ${r.comments.length} finding(s): ${counts.fixed} fixed, ${counts["partly-fixed"]} partly fixed, ${counts["still-present"]} still present, ${counts.unclear} unclear${r.model ? ` · model ${r.model}` : ""}`,
+		"",
+	];
+	if (r.status !== "complete") out.push(`**Status: ${r.status}**${r.error ? `: ${r.error}` : ""}`, "");
+	if (r.warnings.length) out.push("## Notes", "", ...r.warnings.map((w) => `- ${w}`), "");
+	for (const status of VERDICT_STATUSES) {
+		const group = r.comments.filter((c) => c.verdict?.status === status);
+		if (group.length === 0) continue;
+		const word = STATUS_WORDS[status];
+		out.push(`## ${word[0].toUpperCase()}${word.slice(1)} (${group.length})`, "");
+		for (const c of group) out.push(...verdictMd(c));
+	}
+	if (r.checks.length) {
+		out.push("## Checks", "", "| check | status | findings |", "|---|---|---|");
+		for (const c of r.checks) out.push(`| ${c.name} | ${c.status}${c.reason ? ` (${c.reason.replace(/\|/g, "\\|")})` : ""} | ${c.findings.length} |`);
+		if (r.checksNote) out.push("", `_${r.checksNote}_`);
+		out.push("");
+	}
+	const errors = r.workers.filter((w) => w.error);
+	if (errors.length) out.push("## Incomplete", "", ...errors.map((w) => `- ${w.unitId} (${w.files.join(", ")}): ${w.error}`), "");
 	const cost = r.workers.reduce((s, w) => s + w.usage.cost, 0);
 	const tokens = r.workers.reduce((s, w) => s + w.usage.input + w.usage.output, 0);
 	out.push("## Cost", "", `Workers: ${r.workers.length}, ${tokens} tokens${cost ? `, $${cost.toFixed(4)}` : ""}, ${(r.durationMs / 1000).toFixed(1)} s in total.`, "");

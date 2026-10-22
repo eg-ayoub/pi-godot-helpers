@@ -161,7 +161,7 @@ export function registerMemory(pi: ExtensionAPI, rt: Runtime, reviews: ReviewCon
 		if (notes.length) sections.push({ title: "file_notes", body: `What earlier sessions learned about these files:\n\n${notes.join("\n\n")}` });
 		const facts = topFacts(store.facts(), unit.files, 1500);
 		if (facts.length) sections.push({ title: "project_facts", body: renderFacts(facts) });
-		const raised = [...store.raised().values()].filter((r) => unit.files.includes(r.file)).slice(0, rt.config.memory.maxRaisedPerUnit);
+		const raised = [...store.raised().values()].filter((r) => !r.resolvedIn && unit.files.includes(r.file)).slice(0, rt.config.memory.maxRaisedPerUnit);
 		if (raised.length) {
 			sections.push({
 				title: "already_raised",
@@ -180,6 +180,12 @@ export function registerMemory(pi: ExtensionAPI, rt: Runtime, reviews: ReviewCon
 			const r = raised.get(c.fingerprint);
 			if (r) c.alreadyRaised = { reviewId: r.firstReviewId, occurrences: r.occurrences };
 		}
+	};
+
+	reviews.hooks.afterVerify = async (record) => {
+		const store = memoryFor(rt);
+		if (!store) return;
+		store.resolveRaised(record.comments.filter((c) => c.verdict?.status === "fixed").map((c) => c.fingerprint), record.id);
 	};
 
 	reviews.hooks.afterReview = async (record, notes, ctx) => {
@@ -216,7 +222,7 @@ export function registerMemory(pi: ExtensionAPI, rt: Runtime, reviews: ReviewCon
 				return ctx.ui.notify(`Forgot ${arg}.`, "info");
 			}
 			const s = store.stats();
-			const lines = [`memory: ${store.dir}`, `${s.notes} file note(s), ${s.facts} fact(s), ${s.raised} raised item(s), ${s.reviews} review(s)`];
+			const lines = [`memory: ${store.dir}`, `${s.notes} file note(s), ${s.facts} fact(s), ${s.raised} open raised item(s), ${s.reviews} review(s)`];
 			if (sub === "facts" || !sub) {
 				for (const f of store.facts().filter((x) => x.status === "active").slice(0, sub ? 500 : 15)) lines.push(`${f.id} (${f.category}, used ${f.hits}x): ${f.text}`);
 			}

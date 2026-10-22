@@ -6,6 +6,8 @@ This extension defines some helpers I use to review Godot PRs using [pi](https:/
 - **`/review`**: a code reviewer. Describe the change in plain words ("this branch against develop", "the unstaged
   changes", "the last 3 commits"). The review comes back as a page in the browser, laid out like a GitHub pull
   request, and as Markdown. Afterwards it keeps `DESIGN.md` and `AGENTS.md` consistent with the code.
+- **`/review-verify`**: after you fix things, checks each finding of the last review again and tells you which are
+  fixed, partly fixed or still there.
 - **Skills**: the [GodotPrompter](https://github.com/jame581/GodotPrompter) skills (2D, 3D, UI, optimization, …),
   kept at their newest release automatically. Each part of a change gets only the skills it needs; a small local
   model picks them.
@@ -48,7 +50,8 @@ be installed beforehand: the sandbox has no network.
 |---|---|
 | `/advise [question]` | Turns the advisor on (or off), and asks the question if there is one. The advisor only reads. |
 | `/review <what>` | Reviews a change. Options: `--no-docs` (skip the doc update), `--no-checks`, `--no-open` (no browser), `--rules-only` (no classifier). |
-| `/review-cancel` | Stops a running review. |
+| `/review-verify [id]` | Checks whether the findings of the last review (or review `id`) were fixed. Options: `--all` (check again what an earlier verification found fixed), `--no-checks`, `--no-open`. See [Checking your fixes](#checking-your-fixes). |
+| `/review-cancel` | Stops a running review or verification. |
 | `/review-open [id]` | Opens the last review (or another one) in the browser. |
 | `/memory [facts\|notes\|forget <id>]` | Shows or edits what is remembered about the repository. |
 | `/memory-consolidate` | Merges near-duplicate facts and drops notes of deleted files. Asks first. |
@@ -97,6 +100,32 @@ of the skills instead, set `skills.path` to its `skills/` folder; then nothing i
    review already raised is marked. The page opens in your browser; `review.md` is written next to it.
 
 Reviews are kept in `~/.pi/agent/godot-helpers/<repository>/reviews/`.
+
+The page works on any window size: below 1100 px wide the file list moves behind a **Files** button, and long code
+lines wrap (the **wrap long lines** box; your choice is remembered in that browser). The filters only hide and show,
+so opened context stays open.
+
+## Checking your fixes
+
+After fixing what a review found, run `/review-verify`. It takes the findings of the newest review and, for each one,
+answers whether the problem is still in the code as it is now (the working tree, committed or not):
+
+- **Findings of your checks** (`gdlint`, `make check-docs`, …) are settled by running the checks again: fixed when
+  the check no longer reports them.
+- **The other findings** go to a worker with only this job. It sees each finding, the code as it was reviewed, the
+  same code now, and what changed in the file since the reviewed commit. It answers per finding: **fixed**, **partly
+  fixed**, **still present** or **unclear**, with the line and a short reason. It judges the problem, not the wording
+  of the suggestion, so a different fix that works counts as fixed.
+
+The result opens in the browser like a review: what is left to do first, with the findings on their current lines
+and the code around them; fixed findings are behind the **fixed** filter. The review's own page links to its newest
+verification. `review.md` is written too.
+
+Run it again after more fixes: findings that a verification found fixed are not checked again (`--all` checks them
+too). A fixed finding also stops being listed as "already raised" in later reviews, unless a review finds it again.
+
+`/review-verify` only answers for findings the review made. To also review the new code of your fixes, run `/review`
+again: findings that are still there come back marked as raised before.
 
 ## Routing
 
@@ -171,7 +200,8 @@ Kept in `~/.pi/agent/godot-helpers/<repository>/`, never in the repository:
 - **File notes**: what a file does and its pitfalls, written by the model after reading it. A note remembers the
   version of the file it describes; when the file changes, the note is marked stale until it is checked again.
 - **Facts**: decisions and conventions of the project, with near-duplicates merged and a size limit.
-- **Raised items**: findings of earlier reviews, so a review does not repeat itself without saying so.
+- **Raised items**: findings of earlier reviews, so a review does not repeat itself without saying so. Findings that
+  `/review-verify` found fixed are dropped from this list.
 - **A project brief** built from `project.godot` (autoloads, main scene), the `class_name` index and the folders.
 - **Reviews**: every review, its report and its logs.
 

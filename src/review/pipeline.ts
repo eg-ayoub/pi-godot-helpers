@@ -3,6 +3,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { git } from "../repo.ts";
 import type { Runtime } from "../runtime.ts";
 import { PACKAGE_ROOT } from "../runtime.ts";
 import { SkillCatalog } from "../skills/catalog.ts";
@@ -44,6 +45,8 @@ export interface ReviewHooks {
 	route?: (files: FileDiff[], catalog: SkillCatalog, ctx: ExtensionContext, signal: AbortSignal, progress: (msg: string) => void) => Promise<{ decisions: RouteDecision[]; label: string }>;
 	extraSections?: (unit: RoutedUnit, files: FileDiff[]) => Promise<{ title: string; body: string }[]>;
 	afterReview?: (record: ReviewRecord, notes: Record<string, unknown>[], ctx: ExtensionContext) => Promise<void>;
+	/** After /review-verify: the findings it found fixed. */
+	afterVerify?: (record: ReviewRecord) => Promise<void>;
 	markRaised?: (comments: ReviewComment[], files: FileDiff[]) => Promise<void>;
 	present?: (record: ReviewRecord, dir: string, ctx: ExtensionContext, open: boolean) => Promise<string | undefined>;
 }
@@ -66,7 +69,7 @@ export class ReviewController {
 		this.rt = rt;
 	}
 
-	private progress(ctx: ExtensionContext, lines: string[]): void {
+	progress(ctx: ExtensionContext, lines: string[]): void {
 		if (ctx.hasUI) ctx.ui.setWidget("godot-review", lines);
 		else process.stderr.write(`[godot-review] ${lines.at(-1)}\n`);
 	}
@@ -133,6 +136,7 @@ export class ReviewController {
 			}
 			say(`Reviewing ${description}`);
 			for (const w of target.warnings) say(`warning: ${w}`);
+			const headAtReview = (await git(["rev-parse", "--verify", "--quiet", "HEAD"], repo.toplevel)).stdout.trim() || undefined;
 			const files = await collectDiff(target, repo.toplevel);
 			const toReview = reviewable(files).filter((f) => f.lang !== "text" && f.lang !== "binary");
 			if (toReview.length === 0) {
@@ -245,7 +249,7 @@ export class ReviewController {
 				createdAt: new Date(started).toISOString(),
 				durationMs: 0,
 				repo: { toplevel: repo.toplevel, id: repo.id },
-				target: { label: opts.text, description, resolved: target },
+				target: { label: opts.text, description, resolved: target, headAtReview },
 				model,
 				files,
 				comments,

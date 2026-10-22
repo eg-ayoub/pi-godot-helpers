@@ -67,6 +67,19 @@ describe("raised items and search", () => {
 		const r = s.raised().get("abc")!;
 		expect(r).toMatchObject({ firstReviewId: "r1", lastReviewId: "r2", occurrences: 2 });
 	});
+	it("drops items a verification found fixed, until a review raises them again", () => {
+		const { store: s } = store();
+		const item = { fingerprint: "abc", file: "game/items/card.gd", discipline: "project", title: "Identity mutated", severity: "critical" as const };
+		s.recordRaised([item, { ...item, fingerprint: "def", title: "Other" }], "r1");
+		expect(s.resolveRaised(["abc", "nope"], "v1")).toBe(1);
+		expect(s.resolveRaised(["abc"], "v2")).toBe(0);
+		expect(s.raised().get("abc")?.resolvedIn).toBe("v1");
+		expect(s.stats().raised).toBe(1);
+		s.recordRaised([item], "r2");
+		expect(s.raised().get("abc")).toMatchObject({ occurrences: 2, lastReviewId: "r2" });
+		expect(s.raised().get("abc")).not.toHaveProperty("resolvedIn");
+		expect(s.stats().raised).toBe(2);
+	});
 	it("finds notes by path, class and summary, and facts by words", async () => {
 		const { store: s } = store();
 		await s.putNote("game/items/card.gd", "Cards are dragged onto slots.", undefined, prov, 1500);

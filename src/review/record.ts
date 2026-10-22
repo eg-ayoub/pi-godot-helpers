@@ -13,11 +13,21 @@ export interface WorkerSummary {
 
 export interface ReviewRecord {
 	version: 1;
+	/** "verify": a check of an earlier review's findings against the current code (verify.ts). Absent: a review. */
+	kind?: "review" | "verify";
+	/** The review a verification checks. */
+	verifies?: { id: string; description: string; createdAt: string };
 	id: string;
 	createdAt: string;
 	durationMs: number;
 	repo: { toplevel: string; id: string };
-	target: { label: string; description: string; resolved: ResolvedTarget };
+	target: {
+		label: string;
+		description: string;
+		resolved: ResolvedTarget;
+		/** HEAD when the review ran; a later verification compares from it when the target was not a commit range. */
+		headAtReview?: string;
+	};
 	model?: string;
 	files: FileDiff[];
 	comments: ReviewComment[];

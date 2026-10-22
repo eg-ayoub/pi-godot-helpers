@@ -21,6 +21,7 @@ export const OWN_TOOLS: Record<string, Mode[]> = {
 	memory_add_fact: ["advisor", "review", "review-docs"],
 	review_comment: ["worker"],
 	review_done: ["worker"],
+	review_verdict: ["worker"],
 	agents_md_propose: ["docs-migrate"],
 };
 

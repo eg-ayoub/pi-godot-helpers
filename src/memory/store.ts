@@ -52,6 +52,8 @@ export interface RaisedItem {
 	firstReviewId: string;
 	lastReviewId: string;
 	occurrences: number;
+	/** The verification that found it fixed; cleared when a later review raises it again. */
+	resolvedIn?: string;
 }
 
 export function writeAtomic(path: string, content: string): void {
@@ -237,7 +239,7 @@ export class MemoryStore {
 		return new Map(list.map((r) => [r.fingerprint, r]));
 	}
 
-	recordRaised(items: Omit<RaisedItem, "firstReviewId" | "lastReviewId" | "occurrences">[], reviewId: string): void {
+	recordRaised(items: Omit<RaisedItem, "firstReviewId" | "lastReviewId" | "occurrences" | "resolvedIn">[], reviewId: string): void {
 		const map = this.raised();
 		for (const item of items) {
 			const existing = map.get(item.fingerprint);
@@ -246,9 +248,24 @@ export class MemoryStore {
 				existing.lastReviewId = reviewId;
 				existing.severity = item.severity;
 				existing.title = item.title;
+				delete existing.resolvedIn;
 			} else map.set(item.fingerprint, { ...item, firstReviewId: reviewId, lastReviewId: reviewId, occurrences: 1 });
 		}
 		writeAtomic(this.raisedFile(), JSON.stringify([...map.values()], null, 1));
+	}
+
+	/** Mark raised items as fixed (a verification found them gone); later reviews no longer list them. */
+	resolveRaised(fingerprints: string[], verificationId: string): number {
+		const map = this.raised();
+		let n = 0;
+		for (const fp of fingerprints) {
+			const item = map.get(fp);
+			if (!item || item.resolvedIn) continue;
+			item.resolvedIn = verificationId;
+			n++;
+		}
+		if (n) writeAtomic(this.raisedFile(), JSON.stringify([...map.values()], null, 1));
+		return n;
 	}
 
 	// ------------------------------------------------------------------------------------------ search
@@ -282,7 +299,7 @@ export class MemoryStore {
 		return {
 			notes: this.allNotes().length,
 			facts: this.facts().filter((f) => f.status === "active").length,
-			raised: this.raised().size,
+			raised: [...this.raised().values()].filter((r) => !r.resolvedIn).length,
 			reviews: existsSync(reviews) ? readdirSync(reviews).length : 0,
 		};
 	}

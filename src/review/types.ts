@@ -92,6 +92,23 @@ export interface ReviewComment {
 	suggestion?: string;
 	fingerprint: string;
 	alreadyRaised?: { reviewId: string; occurrences: number };
+	/** Verifications only: whether the finding was addressed since the review. */
+	verdict?: Verdict;
+	/** Verifications only: where the finding was in the reviewed version. */
+	previous?: { side: "new" | "old"; line: number | null };
+}
+
+export type VerdictStatus = "still-present" | "partly-fixed" | "unclear" | "fixed";
+
+export const VERDICT_STATUSES: VerdictStatus[] = ["still-present", "partly-fixed", "unclear", "fixed"];
+
+export interface Verdict {
+	status: VerdictStatus;
+	evidence: string;
+	/** A verification worker, a re-run check, or an earlier verification (not checked again). */
+	by: "worker" | "check" | "earlier";
+	/** The earlier verification, when `by` is "earlier". */
+	verificationId?: string;
 }
 
 export interface RouteDecision {

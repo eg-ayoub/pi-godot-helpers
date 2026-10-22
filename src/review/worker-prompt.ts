@@ -37,7 +37,7 @@ export interface WorkerPromptInput {
 	designCapChars?: number;
 }
 
-function readDoc(repoRoot: string, name: string, cap: number): string | undefined {
+export function readDoc(repoRoot: string, name: string, cap: number): string | undefined {
 	const p = join(repoRoot, name);
 	if (!existsSync(p)) return undefined;
 	const text = readFileSync(p, "utf8");
@@ -101,4 +101,6 @@ export interface UnitFile {
 	repoRoot: string;
 	outFile: string;
 	files: FileDiff[];
+	/** Verification units: the ids of the earlier findings the worker gives a verdict on. */
+	findings?: string[];
 }

@@ -2,7 +2,7 @@
 import { createHash } from "node:crypto";
 import { anchorComment, lineText } from "./anchor.ts";
 import { gdscriptFunctions } from "./diff.ts";
-import { SEVERITIES, type CheckResult, type FileDiff, type ReviewComment, type Severity } from "./types.ts";
+import { SEVERITIES, type CheckResult, type FileDiff, type ReviewComment, type Severity, type VerdictStatus } from "./types.ts";
 
 export interface RawComment {
 	file: string;
@@ -129,3 +129,12 @@ export function countBySeverity(comments: ReviewComment[]): Record<Severity, num
 	for (const c of comments) out[c.severity]++;
 	return out;
 }
+
+/** Verification results by status. */
+export function countByStatus(comments: ReviewComment[]): Record<VerdictStatus, number> {
+	const out: Record<VerdictStatus, number> = { "still-present": 0, "partly-fixed": 0, unclear: 0, fixed: 0 };
+	for (const c of comments) if (c.verdict) out[c.verdict.status]++;
+	return out;
+}
+
+export const STATUS_WORDS: Record<VerdictStatus, string> = { "still-present": "still present", "partly-fixed": "partly fixed", unclear: "unclear", fixed: "fixed" };

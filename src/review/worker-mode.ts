@@ -24,6 +24,8 @@ export function appendOut(unit: UnitFile, record: Record<string, unknown>): void
 
 export function registerWorkerTools(pi: ExtensionAPI, rt: Runtime): void {
 	let count = 0;
+	const verdicts = new Map<string, string>();
+	let warnedMissing = false;
 	pi.registerTool({
 		name: "review_comment",
 		label: "review comment",
@@ -67,8 +69,43 @@ export function registerWorkerTools(pi: ExtensionAPI, rt: Runtime): void {
 		parameters: Type.Object({ summary: Type.String() }),
 		async execute(_id, params) {
 			if (!rt.workerUnitFile) throw new Error("review_done is only available to review workers");
-			appendOut(loadUnit(rt.workerUnitFile), { type: "done", summary: params.summary, comments: count });
+			const unit = loadUnit(rt.workerUnitFile);
+			const missing = (unit.findings ?? []).filter((f) => !verdicts.has(f));
+			if (missing.length && !warnedMissing) {
+				// one reminder; a second review_done finishes anyway and the parent marks the rest unclear
+				warnedMissing = true;
+				return { content: [{ type: "text", text: `These findings have no verdict yet: ${missing.join(", ")}. Call review_verdict for each (status "unclear" if you cannot tell), then review_done again.` }], details: undefined };
+			}
+			appendOut(unit, { type: "done", summary: params.summary, comments: count });
 			return { content: [{ type: "text", text: "Done." }], details: undefined, terminate: true };
+		},
+	});
+
+	pi.registerTool({
+		name: "review_verdict",
+		label: "review verdict",
+		description: "Record whether one finding of the earlier review was addressed. One call per finding id listed in the context.",
+		promptSnippet: "review_verdict: record whether an earlier finding was fixed",
+		defaultActive: false,
+		parameters: Type.Object({
+			finding: Type.String({ description: 'The finding id from the context, like "c3"' }),
+			status: StringEnum(["fixed", "partly-fixed", "still-present", "unclear"]),
+			evidence: Type.String({ description: "1-3 sentences citing file:line in the current code" }),
+			line: Type.Optional(Type.Integer({ description: "Current line of the code in question, when it is still there" })),
+		}),
+		async execute(_id, params) {
+			if (!rt.workerUnitFile) throw new Error("review_verdict is only available to review workers");
+			const unit = loadUnit(rt.workerUnitFile);
+			const known = unit.findings ?? [];
+			const finding = params.finding.trim().replace(/^#/, "");
+			if (!known.includes(finding)) throw new Error(`there is no finding ${params.finding} in this context; use one of: ${known.join(", ")}`);
+			verdicts.set(finding, params.status);
+			appendOut(unit, { type: "verdict", ...params, finding });
+			const missing = known.filter((f) => !verdicts.has(f));
+			return {
+				content: [{ type: "text", text: `Recorded: ${finding} ${params.status}. ${missing.length ? `Still without a verdict: ${missing.join(", ")}.` : "Every finding has a verdict; call review_done."}` }],
+				details: undefined,
+			};
 		},
 	});
 }
