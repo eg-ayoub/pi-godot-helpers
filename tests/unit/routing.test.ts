@@ -8,20 +8,20 @@ import { questionFor, questionId } from "../../src/skills/classifier.ts";
 import { routeByRules } from "../../src/skills/router.ts";
 import { RULES, ruleSkillNames } from "../../src/skills/rules.ts";
 import { systemOneClassifier } from "../../src/skills/system-one.ts";
-import { VENDORED_SKILLS } from "../../src/runtime.ts";
+import { ensureTestSkills } from "../helpers/skills.ts";
 import { makeGodotFixture } from "../helpers/fixture.ts";
 
-const catalog = SkillCatalog.load([VENDORED_SKILLS]);
+const catalog = SkillCatalog.load([ensureTestSkills()]);
 
 describe("skill catalog", () => {
-	it("loads the vendored GodotPrompter skills", () => {
+	it("loads the GodotPrompter skills", () => {
 		expect(catalog.size).toBe(56);
 		const review = catalog.get("godot-code-review")!;
 		expect(review.description).toMatch(/reviewing GDScript/);
 		expect(review.tokens).toBeGreaterThan(1000);
 		expect(catalog.body("godot-code-review")).not.toMatch(/^---/);
 	});
-	it("knows every skill the rules name (except ones newer than the vendored version)", () => {
+	it("knows every skill the rules name (except ones newer than the test version)", () => {
 		const newer = new Set(["rendering-pipeline", "web-export", "web-services"]);
 		expect(catalog.unknown(ruleSkillNames(RULES)).filter((s) => !newer.has(s))).toEqual([]);
 	});

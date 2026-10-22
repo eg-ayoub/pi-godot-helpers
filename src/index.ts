@@ -68,6 +68,7 @@ export default function godotHelpers(pi: ExtensionAPI): void {
 		}
 		rt.state.restore(ctx);
 		if (rt.active && rt.mode === "advisor") ctx.ui.setStatus("godot-helpers", "advisor");
+		if (rt.active) rt.startSkillUpdate();
 	});
 
 	pi.on("tool_call", (event, ctx) => {

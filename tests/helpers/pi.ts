@@ -6,6 +6,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { RpcClient } from "@earendil-works/pi-coding-agent";
 import { mockModelsJson } from "../fakes/mock-openai-server.ts";
+import { TEST_SKILLS } from "./skills.ts";
 
 export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 export const PI_CLI = join(ROOT, "node_modules/@earendil-works/pi-coding-agent/dist/cli.js");
@@ -21,8 +22,11 @@ export interface PiHome {
 	config(config: Record<string, unknown>): void;
 }
 
-/** Tests never start a real llama-server (it would download a model): the classifier is off unless a test says so. */
-export const TEST_CONFIG = { classifier: { enabled: false } };
+/**
+ * Tests never start a real llama-server (it would download a model): the classifier is off unless a test says so.
+ * They use the fixed test skills and download none.
+ */
+export const TEST_CONFIG = { classifier: { enabled: false }, skills: { path: TEST_SKILLS } };
 
 function merge(a: Record<string, unknown>, b: Record<string, unknown>): Record<string, unknown> {
 	const out: Record<string, unknown> = { ...a };

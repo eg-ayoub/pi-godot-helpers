@@ -60,6 +60,7 @@ export function renderMarkdown(r: ReviewRecord): string {
 	out.push("## Routing", "", "| part | files | skills | other skills offered |", "|---|---|---|---|");
 	for (const u of r.routing.units) out.push(`| ${u.id} | ${u.files.join(", ")} | ${u.skills.join(", ")} | ${u.advertised.length} |`);
 	out.push("", `Routing: ${r.routing.classifier ?? "rules only"}`, "");
+	if (r.skills) out.push(`Skills: ${r.skills.tag ? `GodotPrompter ${r.skills.tag} (${r.skills.commit?.slice(0, 7)})` : r.skills.source}`, "");
 	const skipped = r.files.filter((f) => f.skipped);
 	if (skipped.length) out.push("## Not reviewed", "", ...skipped.map((f) => `- ${f.path}: ${f.skipped}`), "");
 	const cost = r.workers.reduce((s, w) => s + w.usage.cost, 0);

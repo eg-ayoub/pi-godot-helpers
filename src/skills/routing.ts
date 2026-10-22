@@ -12,6 +12,7 @@ import { showReport } from "../ui/report.ts";
 import { SkillCatalog } from "./catalog.ts";
 import { CLASSIFIER_MODEL_ID, CLASSIFIER_PROVIDER, ClassifierHost, META_SKILLS, rankSkillsForText, refineWithClassifier } from "./classifier.ts";
 import { routeByRules } from "./router.ts";
+import { RULES, ruleSkillNames } from "./rules.ts";
 
 const isWorkerProcess = () => process.argv.includes("--godot-helpers-worker");
 
@@ -78,7 +79,7 @@ export function registerRouting(pi: ExtensionAPI, rt: Runtime, reviews: ReviewCo
 		try {
 			const ready = await classifierReady(ctx.signal);
 			if (!ready.ok) return undefined;
-			const catalog = SkillCatalog.load([rt.skillsRoot(), ...rt.config.skills.extraPaths]);
+			const catalog = SkillCatalog.load(rt.skillRoots());
 			const csharp = await hasCSharp();
 			const skills = catalog.all().filter((s) => !META_SKILLS.has(s.name) && !rt.config.skills.alwaysOn.includes(s.name) && (csharp || !s.name.startsWith("csharp-")));
 			const [provider, id] = providerAndId();
@@ -101,15 +102,38 @@ export function registerRouting(pi: ExtensionAPI, rt: Runtime, reviews: ReviewCo
 	});
 
 	// in Godot repositories (not in review workers), offer the skills through pi's normal skill listing
-	pi.on("resources_discover", async (event) => {
+	pi.on("resources_discover", async (event, ctx) => {
 		if (isWorkerProcess()) return undefined;
 		const repo = await detectRepo(event.cwd);
 		if (!isGodotRepo(repo)) return undefined;
-		return { skillPaths: [rt.skillsRoot(), ...rt.config.skills.extraPaths] };
+		// may run before session_start: read the config here
+		await rt.refresh(ctx);
+		const paths = rt.skillRoots();
+		return paths.length ? { skillPaths: paths } : undefined;
 	});
 
 	pi.on("session_shutdown", async () => {
 		await host.stop();
+	});
+
+	statusSections.push((r) => {
+		const cfg = r.config.skills;
+		const catalog = SkillCatalog.load(r.skillRoots());
+		const lines: string[] = [];
+		if (cfg.path) lines.push(`skills: ${catalog.size} from ${cfg.path} (skills.path: nothing is downloaded)`);
+		else {
+			const installed = r.installedSkills();
+			lines.push(installed ? `skills: ${catalog.size} from GodotPrompter ${installed.tag} (${installed.commit.slice(0, 7)}), downloaded ${installed.fetchedAt.slice(0, 10)}` : "skills: none downloaded yet");
+			const u = r.skillUpdateResult;
+			if (!cfg.source.autoUpdate) lines.push("skills update: off (skills.source.autoUpdate is false)");
+			else if (!u) lines.push(r.skillUpdate ? `skills update: checking ${cfg.source.repo}…` : "skills update: not started (only in a Godot repository)");
+			else if (u.status === "updated") lines.push(`skills update: updated to ${u.installed.tag} at this start`);
+			else if (u.status === "unchanged") lines.push(`skills update: ${u.installed.tag} is the newest tag`);
+			else if (u.status === "busy" || u.status === "failed") lines.push(`skills update: ${u.status}: ${u.error}${u.installed ? ` (still using ${u.installed.tag})` : ""}`);
+		}
+		const missing = catalog.unknown([...ruleSkillNames(RULES), ...r.config.skills.alwaysOn]);
+		if (catalog.size && missing.length) lines.push(`skills the routing rules name but this version lacks: ${missing.join(", ")}`);
+		return lines;
 	});
 
 	statusSections.push((r) => {
@@ -136,7 +160,7 @@ export function registerRouting(pi: ExtensionAPI, rt: Runtime, reviews: ReviewCo
 				return;
 			}
 			const started = Date.now() - t0;
-			const catalog = SkillCatalog.load([rt.skillsRoot(), ...rt.config.skills.extraPaths]);
+			const catalog = SkillCatalog.load(rt.skillRoots());
 			const sample: FileDiff = {
 				path: "game/ui/hud.gd",
 				status: "M",

@@ -24,6 +24,8 @@ export interface ReviewRecord {
 	checks: CheckResult[];
 	checksNote?: string;
 	routing: { decisions: RouteDecision[]; units: RoutedUnit[]; classifier?: string };
+	/** The skills the review used: a GodotPrompter tag, or the configured folder. */
+	skills?: { source: string; tag?: string; commit?: string };
 	workers: WorkerSummary[];
 	docPass?: { patches: { file: string; patch: string }[]; finalText?: string; error?: string; skipped?: string };
 	warnings: string[];

@@ -5,11 +5,11 @@
 //   npm run eval:routing -- --server http://127.0.0.1:8080 a llama-server that already runs a decision model
 //   npm run eval:routing -- --llama-server $(which llama-server) --model ~/models/Kev-4B-Q4_K_M.gguf
 //   npm run eval:routing -- --llama-server … --hf ggml-org/Kev-4B-GGUF:Q4_K_M   (downloads on first use)
-//   options: --scope rules|all|both  --gpu-layers auto|N  --verbose  --json out.json
+//   options: --scope rules|all|both  --gpu-layers auto|N  --skills DIR (default: GodotPrompter v1.15.1, as the
+//   tests)  --verbose  --json out.json
 import { writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { DEFAULT_CONFIG, mergeConfig, type ClassifierConfig } from "../src/config.ts";
 import type { FileDiff, RouteDecision } from "../src/review/types.ts";
@@ -17,9 +17,9 @@ import { SkillCatalog } from "../src/skills/catalog.ts";
 import { applyProbabilities, ClassifierHost, META_SKILLS, refineWithClassifier } from "../src/skills/classifier.ts";
 import { routeByRules } from "../src/skills/router.ts";
 import { systemOneClassifier } from "../src/skills/system-one.ts";
+import { ensureTestSkills } from "../tests/helpers/skills.ts";
 import { CASES, type RoutingCase } from "./routing-cases.ts";
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const ALWAYS_ON = ["godot-code-review"];
 const THRESHOLDS = [0.3, 0.4, 0.5, 0.6, 0.7, 0.8];
 const WEAK_RULE_FACTORS = [0.5, 1];
@@ -91,7 +91,8 @@ function printMisses(s: Score): void {
 async function main(): Promise<void> {
 	const a = args();
 	const verbose = a.has("verbose");
-	const catalog = SkillCatalog.load([join(ROOT, "vendor", "GodotPrompter", "skills")]);
+	// a fixed GodotPrompter version keeps the numbers comparable; --skills measures another copy
+	const catalog = SkillCatalog.load([a.get("skills") ?? ensureTestSkills()]);
 	const unknown = catalog.unknown(CASES.flatMap((c) => c.labels));
 	if (unknown.length) throw new Error(`labels name unknown skills: ${unknown.join(", ")}`);
 	const files = CASES.map(toFile);

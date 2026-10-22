@@ -20,12 +20,12 @@ const GIT_ENV = {
 };
 
 /** Run git on the host (the extension's own reads; the model's commands go through the sandbox). */
-export function git(args: string[], cwd: string, opts: { maxBuffer?: number; input?: string } = {}): Promise<GitResult> {
+export function git(args: string[], cwd: string, opts: { maxBuffer?: number; input?: string; env?: Record<string, string>; timeoutMs?: number } = {}): Promise<GitResult> {
 	return new Promise((resolvePromise) => {
 		const child = execFile(
 			"git",
 			["-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null", "-c", "diff.external=", "--no-pager", ...args],
-			{ cwd, env: { ...process.env, ...GIT_ENV }, maxBuffer: opts.maxBuffer ?? 256 * 1024 * 1024, encoding: "utf8" },
+			{ cwd, env: { ...process.env, ...GIT_ENV, ...opts.env }, maxBuffer: opts.maxBuffer ?? 256 * 1024 * 1024, encoding: "utf8", timeout: opts.timeoutMs ?? 0, killSignal: "SIGKILL" },
 			(error, stdout, stderr) => {
 				const code = error ? (typeof (error as { code?: unknown }).code === "number" ? ((error as { code: number }).code) : 1) : 0;
 				resolvePromise({ stdout: String(stdout ?? ""), stderr: String(stderr ?? ""), code });

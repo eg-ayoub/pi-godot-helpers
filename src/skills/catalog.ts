@@ -1,4 +1,4 @@
-// The skills a review can use: the vendored GodotPrompter skills plus any extra skill directories, each a
+// The skills a review can use: the downloaded GodotPrompter skills plus any extra skill directories, each a
 // folder with a SKILL.md (Agent Skills layout: frontmatter with name and description).
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";

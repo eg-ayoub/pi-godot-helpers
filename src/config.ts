@@ -3,6 +3,7 @@
 // must not be able to loosen its own sandbox.
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import type { SkillSourceConfig } from "./skills/source.ts";
 
 export interface CheckConfig {
 	name: string;
@@ -28,7 +29,7 @@ export interface ClassifierConfig {
 	threshold: number;
 	/**
 	 * Physical batch size (-b and -ub). A yes/no prompt may be longer than one batch with Kev; a choice question
-	 * (advisor pre-routing) must fit in one: 1024 holds the 53 vendored skills. clef and laya need the whole
+	 * (advisor pre-routing) must fit in one: 1024 holds the 53 code skills of GodotPrompter v1.15.1. clef and laya need the whole
 	 * prompt in one batch. Kev-4B Q4_K_M on an RTX 4050 laptop GPU: 3.7 GB VRAM at 512, 4.4 GB at 1024, 5.5 GB at 2048.
 	 */
 	ubatch: number;
@@ -78,8 +79,10 @@ export interface Config {
 	};
 	checks: CheckConfig[];
 	skills: {
-		/** Directory of GodotPrompter-style skills; default: the vendored copy. */
+		/** Use this folder of GodotPrompter-style skills and download nothing. */
 		path?: string;
+		/** Where the skills are downloaded from: the newest tag on the branch, fetched on every start. */
+		source: SkillSourceConfig;
 		maxPerUnit: number;
 		alwaysOn: string[];
 		/** Extra skill directories with the same layout (your own project skills). */
@@ -120,6 +123,7 @@ export const DEFAULT_CONFIG: Config = {
 		{ name: "check-docs", command: "make check-docs", enabled: true, scope: "repo", parser: "lines" },
 	],
 	skills: {
+		source: { repo: "https://github.com/jame581/GodotPrompter.git", autoUpdate: true, timeoutSeconds: 120 },
 		maxPerUnit: 4,
 		alwaysOn: ["godot-code-review"],
 		extraPaths: [],

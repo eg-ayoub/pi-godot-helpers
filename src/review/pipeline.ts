@@ -155,7 +155,15 @@ export class ReviewController {
 			}
 			if (abort.signal.aborted) throw new Error("cancelled");
 
-			const catalog = SkillCatalog.load([rt.skillsRoot(), ...rt.config.skills.extraPaths]);
+			if (!rt.skillsRoot() && rt.skillUpdate) say("Downloading the GodotPrompter skills (first start)…");
+			await rt.skillsReady();
+			const catalog = SkillCatalog.load(rt.skillRoots());
+			const installed = rt.installedSkills();
+			if (catalog.size === 0) {
+				const why = rt.skillUpdate ? await rt.skillUpdate.then((r) => ("error" in r ? r.error : undefined)) : undefined;
+				target.warnings.push(`no skills are available${why ? ` (download failed: ${why})` : ""}; the review runs without them`);
+				say(`warning: ${target.warnings.at(-1)}`);
+			}
 			say("Routing skills…");
 			const routed =
 				!opts.rulesOnly && this.hooks.route
@@ -243,6 +251,7 @@ export class ReviewController {
 				checks,
 				checksNote,
 				routing: { decisions: routed.decisions, units, classifier: routed.label },
+				skills: installed ? { source: installed.repo, tag: installed.tag, commit: installed.commit } : rt.config.skills.path ? { source: rt.config.skills.path } : undefined,
 				workers,
 				warnings: target.warnings,
 				status: "complete",

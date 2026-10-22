@@ -4,14 +4,14 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
-import { DEFAULT_CONFIG, loadConfig, repoDataDir, type Config } from "./config.ts";
+import { DEFAULT_CONFIG, dataDir, loadConfig, repoDataDir, type Config } from "./config.ts";
 import { detectRepo, isGodotRepo, type RepoInfo } from "./repo.ts";
 import type { GateContext, Mode } from "./security/gate.ts";
 import type { SandboxOptions } from "./security/sandbox.ts";
+import { SkillSource, type InstalledSkills, type UpdateResult } from "./skills/source.ts";
 import { ModeState } from "./state.ts";
 
 export const PACKAGE_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-export const VENDORED_SKILLS = join(PACKAGE_ROOT, "vendor", "GodotPrompter", "skills");
 
 /** Tools this extension registers and the modes in which the model may call them. */
 export const OWN_TOOLS: Record<string, Mode[]> = {
@@ -32,6 +32,10 @@ export class Runtime {
 	workerUnitFile?: string;
 	agentDir = getAgentDir();
 	configError?: string;
+	/** The skills download started at session start, if one is running or done. */
+	skillUpdate?: Promise<UpdateResult>;
+	/** Its result, once it is done. */
+	skillUpdateResult?: UpdateResult;
 
 	readonly pi: ExtensionAPI;
 
@@ -65,12 +69,47 @@ export class Runtime {
 		return this.repo ? repoDataDir(this.agentDir, this.repo.id) : undefined;
 	}
 
-	skillsRoot(): string {
-		return this.config.skills.path ?? VENDORED_SKILLS;
+	/** All downloaded GodotPrompter versions live under this folder. */
+	skillsStore(): string {
+		return join(dataDir(this.agentDir), "skills");
+	}
+
+	skillSource(): SkillSource {
+		return new SkillSource(join(this.skillsStore(), "GodotPrompter"));
+	}
+
+	/** The GodotPrompter copy in use (undefined when skills.path is set, or before the first download). */
+	installedSkills(): InstalledSkills | undefined {
+		return this.config.skills.path ? undefined : this.skillSource().current();
+	}
+
+	/** The skills folder in use: skills.path, else the downloaded copy. */
+	skillsRoot(): string | undefined {
+		return this.config.skills.path ?? this.installedSkills()?.skillsDir;
+	}
+
+	/** Every folder skills are loaded from, existing ones only. */
+	skillRoots(): string[] {
+		const root = this.skillsRoot();
+		return [...(root ? [root] : []), ...this.config.skills.extraPaths].filter((r) => existsSync(r));
+	}
+
+	/** On every start in a Godot repository: fetch the newest GodotPrompter tag in the background. */
+	startSkillUpdate(): void {
+		const cfg = this.config.skills;
+		if (cfg.path || !cfg.source.autoUpdate || this.skillUpdate) return;
+		this.skillUpdate = this.skillSource().update(cfg.source);
+		void this.skillUpdate.then((r) => (this.skillUpdateResult = r));
+	}
+
+	/** Wait for the download only when there is no copy at all yet (the first start). */
+	async skillsReady(): Promise<void> {
+		if (this.skillsRoot() || !this.skillUpdate) return;
+		await this.skillUpdate;
 	}
 
 	readRoots(): string[] {
-		const roots = [this.skillsRoot(), ...this.config.skills.extraPaths, ...this.config.readRoots];
+		const roots = [this.config.skills.path ?? this.skillsStore(), ...this.config.skills.extraPaths, ...this.config.readRoots];
 		return roots.filter((r) => existsSync(r)).map((r) => realpathSync(r));
 	}
 

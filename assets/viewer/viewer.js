@@ -197,7 +197,7 @@ function renderExtra(r) {
   if (units.length) {
     box.append(
       el("h2", { text: "Routing" }),
-      el("p", { class: "muted", text: `Routing: ${r.routing.classifier || "rules only"}` }),
+      el("p", { class: "muted", text: `Routing: ${r.routing.classifier || "rules only"}${r.skills ? `. Skills: ${r.skills.tag ? `GodotPrompter ${r.skills.tag}` : r.skills.source}` : ""}` }),
       el("table", { class: "plain" }, el("tr", null, el("th", { text: "part" }), el("th", { text: "files" }), el("th", { text: "skills" }), el("th", { text: "other skills offered" })), units.map((u) => el("tr", null, el("td", { text: u.id }), el("td", { text: u.files.join(", ") }), el("td", { text: u.skills.join(", ") }), el("td", { text: u.advertised.join(", ") })))),
     );
   }
